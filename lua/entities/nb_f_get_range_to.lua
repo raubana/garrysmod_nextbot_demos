@@ -42,25 +42,23 @@ Mistakes to avoid:
 	forward for computers, but calculating a square root is tricky because the
 	computer has to do a lot of guessing. Really! Look here:
 	https://en.wikipedia.org/wiki/Methods_of_computing_square_roots
-	Calculating a square root is very expensive! If you intend to keep your
-	scripts running optimally, you'd want to avoid calling this function unless
-	you have to get an exact distance.
+	Calculating a square root is very expensive! Avoid calling this function if
+	you can, but do use it where it's convinient.
 	
 	If you need to compare the distances between many points, using the squared
 	distance is significantly cheaper since you don't have to calculate a square
-	root. See the GetRangeSquaredTo NextBot for an example. After a single point
-	is picked, and should you need to know that exact distance, all you'd have 
-	to do then is calculate the square root of that squared distance.
-	
-	
+	root. See the GetRangeSquaredTo example. After a single point is picked, and
+	should you need to know that exact distance, all you'd have to do then is
+	calculate the square root of that squared distance.	
 
 
 
 
  ========== DEMO ========== 
-	A NextBot of Kleiner is used in this demo.
+	A NextBot of Grigori is used in this demo.
 
-	The NextBot will say "bon voyage" when the player is over 300 units away.
+	The NextBot will say a farewell speech when the player is over 300 units
+	away.
 
 
 
@@ -77,7 +75,7 @@ Mistakes to avoid:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/monk.mdl" )
 end
 
 
@@ -96,7 +94,7 @@ function ENT:RunBehaviour()
 		dist = self:GetRangeTo(ply)
 		
 		if dist > 300 then
-			self:EmitSound("vo/k_lab/kl_bonvoyage.wav")
+			self:EmitSound("vo/ravenholm/exit_darkroad.wav")
 			break
 		end
 	

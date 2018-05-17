@@ -52,13 +52,13 @@ Usage:
 
 
  ========== DEMO ========== 
-	A NextBot of Kleiner is used in this demo.
+	A NextBot of Eli is used in this demo.
 
 	The NextBot will attempt to find the furthest Blue Barrel that it can see
 	and then go to it. That prop can be found at the top of the Construction
 	Props list.
 
-	If the NextBot doesn't find a valid spot, it'll exclaim "Oh dear."
+	If the NextBot doesn't find a valid spot, it'll exclaim "never."
 ]]
 
 
@@ -67,7 +67,7 @@ Usage:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/Eli.mdl" )
 	
 	if SERVER then
 		self.loco:SetDesiredSpeed( 200 )
@@ -83,7 +83,7 @@ function ENT:RunBehaviour()
 	
 	coroutine.wait( 2 )
 	
-	local ent_list = ents.FindByModel("models/props_borealis/bluebarrel001.mdl")
+	local ent_list = ents.FindInPVS(self)
 	
 	print( "Number of ents:", #ent_list )
 	-- show the ents.
@@ -96,16 +96,18 @@ function ENT:RunBehaviour()
 	
 	local sorted_spots = {}
 	for i, ent in ipairs(ent_list) do
-		local dist_sq = self:GetRangeSquaredTo(ent:GetPos())
-		
-		table.insert(
-			sorted_spots, 
-			{
-				spot = ent:GetPos(),
-				ent = ent,
-				dist_sq = dist_sq
-			} 
-		)
+		if ent:GetModel() == "models/props_borealis/bluebarrel001.mdl" then
+			local dist_sq = self:GetRangeSquaredTo(ent:GetPos())
+			
+			table.insert(
+				sorted_spots, 
+				{
+					spot = ent:GetPos(),
+					ent = ent,
+					dist_sq = dist_sq
+				} 
+			)
+		end
 	end
 	 -- note that we sort in descending order.
 	table.SortByMember(sorted_spots, "dist_sq", false)
@@ -126,7 +128,7 @@ function ENT:RunBehaviour()
 		self:MoveToPos( spot )
 		self:StartActivity( ACT_IDLE )
 	else
-		self:EmitSound( "vo/k_lab/kl_ohdear.wav" )
+		self:EmitSound( "vo/citadel/eli_nonever.wav" )
 	end
 	
 	while true do

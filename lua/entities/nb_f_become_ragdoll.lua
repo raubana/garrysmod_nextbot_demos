@@ -31,12 +31,8 @@ https://wiki.garrysmod.com/page/NextBot/BecomeRagdoll
 
 Usage:
 	BecomeRagdoll is a method, and is not meant to be overridden.
-
+	
 	BecomeRagdoll is called automatically when a NextBot dies.
-
-	By default, the ragdoll will react normally based on the damage it received
-	on its death. The damage info can be changed or replaced within the
-	OnKilled hook to change the behaviour of the ragdoll when the NextBot dies.
 
 	It is also possible to call BecomeRagdoll outside of OnKilled and still
 	work normally, although doing this will NOT kill the NextBot.
@@ -47,6 +43,10 @@ Functionality:
 	clientside.
 
 	The NextBot is removed automatically moments after BecomeRagdoll is called.
+	
+	By default, the ragdoll will react normally based on the damage it received
+	on its death. The damage info can be changed or replaced within the
+	OnKilled hook to change the behaviour of the ragdoll when the NextBot dies.
 
 
 Mistakes to avoid:

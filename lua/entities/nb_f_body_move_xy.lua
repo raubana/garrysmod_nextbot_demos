@@ -26,26 +26,20 @@ https://wiki.garrysmod.com/page/NextBot/BodyMoveXY
 
  ========== NOTES ========== 
  
-About:
-	BodyMoveXY is considered a helper function, since it calls a few other
-	methods that would typically be called at around the same time. In this
-	case, it helps by calling animation methods often called together for NPC
-	movement.
-
 Usage:
-	TODO
+	BodyMoveXY should only be called in the BodyUpdate hook.
 
 Functionality:
-	TODO
-
-Mistakes to avoid:
-	TODO
+	BodyMoveXY is considered a helper function, since it calls a few other
+	methods that would typically be called at around the same time. In this
+	case, it helps by calling animation methods often called together for a
+	movement animation.
 
 
 
 
  ========== DEMO ========== 
-	A NextBot of Kleiner is used in this demo.
+	A NextBot of Mossman is used in this demo.
 
 	The NextBot will move 200 units east, stop, then move 200 units north.
 
@@ -59,7 +53,7 @@ Mistakes to avoid:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/mossman.mdl" )
 	
 	if SERVER then
 		self.bodymovexy_enabled = false

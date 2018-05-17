@@ -43,7 +43,7 @@ About:
 
 Usage:
 	Solid masks (which are culminations of contents masks) are meant for traces.
-	TODO: I'm not entirely sure how this method is useful.
+	TODO
 
 
 
@@ -59,7 +59,7 @@ Usage:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/vortigaunt.mdl" )
 end
 
 

@@ -42,31 +42,25 @@ https://wiki.garrysmod.com/page/NextBot/FindSpot
 
 
  ========== NOTES ========== 
- 
-About:
+
+Usage:
 	This is a type of helper function usually meant for quickly finding a hiding
 	spot.
 
-Usage:
-	TODO
-
 Functionality:
-	TODO
-
-Mistakes to avoid:
 	TODO
 
 
 
 
  ========== DEMO ========== 
-	A NextBot of Kleiner is used in this demo.
+	A NextBot of Barney is used in this demo.
 
 	The NextBot will attempt to find a hiding spot within 1000 units of it. Of
 	all options within that range, it'll pick the one that is furthest away.
 	(TODO: Is that based on A-B distance or travel distance?)
 
-	If the NextBot doesn't find a spot, it'll exclaim "Oh dear."
+	If the NextBot doesn't find a spot, it'll exclaim "damn it all."
 ]]
 
 
@@ -75,7 +69,7 @@ Mistakes to avoid:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/Barney.mdl" )
 	
 	if SERVER then
 		self.loco:SetDesiredSpeed( 200 )
@@ -105,7 +99,7 @@ function ENT:RunBehaviour()
 		self:MoveToPos( spot )
 		self:StartActivity( ACT_IDLE )
 	else
-		self:EmitSound( "vo/k_lab/kl_ohdear.wav" )
+		self:EmitSound( "vo/streetwar/rubble/ba_damnitall.wav" )
 	end
 	
 	while true do

@@ -43,30 +43,24 @@ https://wiki.garrysmod.com/page/NextBot/FindSpots
 
  ========== NOTES ========== 
  
-About:
-	TODO
-
 Usage:
-	TODO
+	This is for quickly finding multiple hiding spots.
 
 Functionality:
-	TODO
-
-Mistakes to avoid:
 	TODO
 
 
 
 
  ========== DEMO ========== 
-	A NextBot of Kleiner is used in this demo.
+	A NextBot of Breen is used in this demo.
 
 	This demo is similar to the FindSpot demo. The NextBot will attempt to find
 	a hiding spot within 1000 units of it. In order to pick a spot, each will be
 	evaluated using a trace. If visibility is blocked between the hiding spot
 	and the NextBot, then it will use that spot.
 
-	If the NextBot doesn't find a valid spot, it'll exclaim "Oh dear."
+	If the NextBot doesn't find a valid spot, it'll exclaim "no!"
 ]]
 
 
@@ -75,7 +69,7 @@ Mistakes to avoid:
 -- S+C
 function ENT:Initialize()
 	print( self, "Initialize" )
-	self:SetModel( "models/Kleiner.mdl" )
+	self:SetModel( "models/breen.mdl" )
 	
 	if SERVER then
 		self.loco:SetDesiredSpeed( 200 )
@@ -126,7 +120,7 @@ function ENT:RunBehaviour()
 		self:MoveToPos( spot )
 		self:StartActivity( ACT_IDLE )
 	else
-		self:EmitSound( "vo/k_lab/kl_ohdear.wav" )
+		self:EmitSound( "vo/citadel/br_no.wav" )
 	end
 	
 	while true do
