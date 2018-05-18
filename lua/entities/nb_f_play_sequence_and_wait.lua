@@ -44,8 +44,8 @@ Usage:
 	A NextBot of Odessa Cubbage is used in this demo.
 
 	In this demo, the NextBot will perform a short scripted sequence. He'll talk
-	about an RPG, ask if anyone wants to volunteer, give the RPG, then present
-	himself.
+	about an RPG, ask if anyone wants to volunteer, give the RPG away, then
+	present himself.
 ]]
 
 
