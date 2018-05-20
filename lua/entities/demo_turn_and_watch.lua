@@ -102,7 +102,7 @@ function ENT:AutoTurnToTarget()
 		local head_angle = target_angle - self:GetAngles()
 		head_angle:Normalize()
 		
-		if math.abs(head_angle.yaw) > 60 then
+		if math.abs(head_angle.yaw) > 60 and math.abs(head_angle.pitch) < 80 then
 			local anim_name = ""
 			local degree = 0
 			if head_angle.yaw > 45 then
