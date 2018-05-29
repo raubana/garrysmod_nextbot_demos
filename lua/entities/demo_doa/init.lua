@@ -23,13 +23,13 @@ end
 
 
 
-function ENT:GiveSomeSpace()
+function ENT:GetAngleNeedsSpace()
 	local closest_ang = nil
 	local closest_dist = nil
 	local trace_length = 45
 	local start = self:GetPos() + Vector(0,0,75/2)
 	
-	local offset = CurTime()%360
+	local offset = (CurTime()%45)*8
 	
 	for ang = 0, 360, 45 do
 		local ang2 = ang + offset
@@ -37,14 +37,14 @@ function ENT:GiveSomeSpace()
 		local normal = Angle(0,ang2,0):Forward()
 		local endpos = start + normal * trace_length
 		
-		local tr = util.TraceHull({
-			start = start,
-			endpos = endpos,
-			mins = Vector(-5,-5,-30),
-			maxs = Vector(5,5,30),
-			filter = self,
-			mask = MASK_SOLID,
-		})
+		local tr = util.TraceEntity({
+				start = start,
+				endpos = endpos,
+				filter = self,
+				mask = MASK_SOLID,
+			},
+			self
+		)
 		
 		debugoverlay.Line( start, start + normal * (trace_length * tr.Fraction), 0.1, color_white, true )
 		
@@ -54,66 +54,89 @@ function ENT:GiveSomeSpace()
 		end
 	end
 	
-	if closest_dist == nil or closest_dist > 15 then
-		return true
+	if closest_dist == nil or closest_dist > 1 then
+		return nil
 	else
-		self.loco:Approach(self:GetPos() - (Angle(0,closest_ang,0):Forward() * 100), 1)
+		return Angle(0,closest_ang,0)
 	end
 end
 
 
 
 
-function ENT:HandleStuck()
+function ENT:HandleStuck( options )
 	print( self, "HandleStuck" )
+	
+	local options = options or {}
+	
+	local timeout = CurTime() + (options.timeout or 60)
 
 	-- We want to move to a position further along the path, but we know that
 	-- conventional methods aren't working.
 	
 	-- First we give the NextBot a little space.
-	while true do
-		local result = self:GiveSomeSpace()
-		if result then break end
+	self.loco:SetDesiredSpeed( 50 )
+	while CurTime() < timeout do
+		local result = self:GetAngleNeedsSpace()
+		if result == nil then break end
+		self.loco:Approach(self:GetPos() - (result:Forward()*100), 1)
 		coroutine.yield()
 	end
+	
+	if CurTime() >= timeout then return "timeout" end
 	
 	local start_dist = self.path:GetCursorPosition()
 	local start_pos = self.path:GetPositionOnPath( start_dist )
 
 	-- We use a dynamic A* algorithm to find a way back onto the path.
-	local path_gen = OBST_AVOID_PATH_GEN:create( self, self.path, start_dist+20, 35, 75, 75 )
-	path_gen:CreateSeedNode( self:GetPos() )
-	-- path_gen:CreateSeedNode( self.path:GetPositionOnPath( start_dist-10 ) )
 	
-	local path = path_gen:CalcPath()
+	local attempts = {64,32,24,16,12,8}
+	local offset_mult = 1
+	local path_gen = nil
+	local result = nil
 	
-	-- TODO: Handle if no path is returned.
+	for i, attempt in ipairs(attempts) do
+		offset_mult = attempt*2
+		path_gen = OBST_AVOID_PATH_GEN:create( self, self.path, start_dist+20, 25, 75, 75, {draw=true, node_min_dist=attempt} )
+		path_gen:CreateSeedNode( self:GetPos() )
+		result = path_gen:CalcPath()
+		print( i, attempt, result )
+		
+		if result == "ok" then break end
+	end
 	
-	self.path:MoveCursorToClosestPosition( path[#path] )
-	self.path:MoveCursorTo( self.path:GetCursorPosition()+100 )
-	table.remove( path, 1 )
+	if result != "ok" then return "failed" end
 	
-	while #path > 0 do
+	local path = path_gen.output
+	
+	timeout = CurTime() + (options.timeout or 60)
+	
+	self.loco:SetDesiredSpeed( 100 )
+	
+	while #path > 0 and CurTime() < timeout do
 		for i = 1, #path - 1 do
 			debugoverlay.Line( path[i], path[i+1], 0.1, color_white, true )
 		end
 		
-		self.loco:SetDesiredSpeed( 100 )
+		local offset = vector_origin
 		
-		self.loco:Approach(path[1], 1)
+		local result = self:GetAngleNeedsSpace()
+		if result != nil then offset = -result:Forward()*offset_mult end
+		
+		self.loco:Approach(path[1]+offset, 1)
 		self.loco:FaceTowards( path[1] )
-		if self:GetPos():Distance( path[1] ) < 15 then
+		if self:GetPos():Distance( path[1] ) < 10 then
 			table.remove( path, 1 )
 		end
-		
-		local result = self:GiveSomeSpace()
 		
 		coroutine.yield()
 	end
 	
-	self.loco:ClearStuck()
+	if CurTime() >= timeout then return "timeout" end
 	
+	self.loco:ClearStuck()
 	self.loco:SetDesiredSpeed( 200 )
+	return "ok"
 end
 
 
@@ -127,20 +150,48 @@ function ENT:MoveToPos( pos, options )
 	self.path:SetGoalTolerance( 20 )
 	self.path:Compute( self, pos )
 
-	if ( !self.path:IsValid() ) then return "failed" end
-
-	while ( self.path:IsValid() ) do
+	if not self.path:IsValid() then return "failed" end
+	
+	local last_update = CurTime()
+	local motionless_ticks = 0
+	
+	while self.path:IsValid() do
+		local current_update = CurTime()
+	
 		self.path:Update( self )
 		
-		if ( options.draw ) then
+		if options.draw then
 			self.path:Draw()
 		end
 		
-		if ( self.loco:IsStuck() ) then
-			self:HandleStuck()
-			self.path:Compute( self, pos )
-			-- return "stuck"
+		local reset_motionless_ticks = true
+		if self:OnGround() then
+			local ground_ent = self:GetGroundEntity()
+			
+			if IsValid(ground_ent) or ground_ent:IsWorld() then
+				local relative_vel = self:GetVelocity() - ground_ent:GetVelocity()
+				local speed = relative_vel:Length()
+				
+				if speed < 2 then
+					reset_motionless_ticks = false
+				end
+			end
 		end
+		
+		if reset_motionless_ticks then
+			motionless_ticks = 0
+		else
+			motionless_ticks = motionless_ticks + 1
+		end
+		
+		if self.loco:IsStuck() or motionless_ticks * engine.TickInterval() > 0.5 then
+			local result = self:HandleStuck()
+			print( result )
+			if result != "ok" then return result end
+			self.path:Compute( self, pos )
+		end
+		
+		last_update = current_update
 
 		coroutine.yield()
 	end
@@ -168,7 +219,8 @@ function ENT:RunBehaviour()
 					)
 		
 		if isvector( spot ) then
-			self:MoveToPos( spot, { draw=true } )
+			self.loco:SetDesiredSpeed( 200 )
+			self:MoveToPos( spot, {draw=true} )
 		else
 			print( "Failed to find a spot to go to." )
 		end

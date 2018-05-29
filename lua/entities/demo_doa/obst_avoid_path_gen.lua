@@ -5,7 +5,7 @@ include("connection_object.lua")
 OBST_AVOID_PATH_GEN = OBST_AVOID_PATH_GEN or {}
 
 
-function OBST_AVOID_PATH_GEN:create( ent, path, min_path_dist, hull_thick, hull_stand_height, hull_crouch_height)
+function OBST_AVOID_PATH_GEN:create( ent, path, min_path_dist, hull_thick, hull_stand_height, hull_crouch_height, options )
 	local instance = {}
 	setmetatable(instance,self)
 	self.__index = self
@@ -17,6 +17,12 @@ function OBST_AVOID_PATH_GEN:create( ent, path, min_path_dist, hull_thick, hull_
 	instance.hull_halfthick = hull_thick / 2
 	instance.hull_stand_height = hull_stand_height
 	instance.hull_crouch_height = hull_crouch_height
+	
+	instance.options = options or {}
+	
+	instance.node_min_dist = options.node_min_dist or 8
+	instance.node_travel_dist = instance.node_min_dist + 1
+	instance.node_max_dist = instance.node_min_dist*2-1
 	
 	instance.nodes = {}
 	instance.connections = {}
@@ -61,15 +67,14 @@ function OBST_AVOID_PATH_GEN:DrawDebug(duration)
 	end
 end
 
+
 -- =======================================================
 
-local NODE_MIN_DIST = 16
-local NODE_TRAVEL_DIST = NODE_MIN_DIST + 1
-local NODE_MAX_DIST = 31
+local COLOR_RED = Color(255,0,0)
+local COLOR_GREEN = Color(0,255,0)
 
-
-local function doValidationHullTrace( start, endpos, mins, maxs, filter )
-	return util.TraceHull({
+local function doValidationHullTrace( start, endpos, mins, maxs, filter, drawit )
+	local tr = util.TraceHull({
 		start = start,
 		endpos = endpos,
 		mins = mins,
@@ -77,27 +82,64 @@ local function doValidationHullTrace( start, endpos, mins, maxs, filter )
 		filter = filter,
 		mask = MASK_SOLID,
 	})
+	
+	if drawit then
+		local c = COLOR_GREEN
+		if tr.Hit then c = COLOR_RED end
+		
+		debugoverlay.SweptBox( start, endpos, mins, maxs, angle_zero, 1, c )
+	end
+	
+	return tr
 end
 
 
-function OBST_AVOID_PATH_GEN:ScoreNode( new_node )
+function OBST_AVOID_PATH_GEN:EvaluateNode( new_node )
 	self.path:MoveCursorTo( self.min_path_dist )
 	self.path:MoveCursorToClosestPosition( new_node.pos )
 	
 	local cursor_dist = self.path:GetCursorPosition()
 	local cursor_pos = self.path:GetPositionOnPath( cursor_dist )
 	
-	new_node.dist_from_path = new_node.pos:Distance( cursor_pos )
-	new_node.score = new_node.dist_from_path + new_node.travel_dist*0.25 + (self.min_path_dist-cursor_dist)
+	new_node.path_cursor_pos = cursor_pos
 	
-	new_node.valid_end_node = cursor_dist > self.min_path_dist
+	new_node.dist_from_path = new_node.pos:Distance( cursor_pos )
+	new_node.path_cursor_offset = cursor_dist-self.min_path_dist
+end
+
+
+function OBST_AVOID_PATH_GEN:ScoreNodeWithParent( new_node, parent )
+	local data = {}
+	data.parent = parent
+	data.dist_from_parent = 0
+	data.travel_dist = 0
+	if parent then 
+		data.dist_from_parent = new_node.pos:Distance( parent.pos )
+		data.travel_dist = parent.travel_dist + data.dist_from_parent
+	end
+	--data.score = new_node.dist_from_path
+	--data.score = data.travel_dist
+	
+	if new_node.path_cursor_offset < 0 then 
+		new_node.path_cursor_offset = -math.pow(new_node.path_cursor_offset, 2)
+	end
+	
+	data.score = new_node.dist_from_path + (data.travel_dist*2) - new_node.path_cursor_offset
+	return data
+end
+
+
+function OBST_AVOID_PATH_GEN:ApplyDataToNode( new_node, data )
+	new_node.parent = data.parent
+	new_node.travel_dist = data.travel_dist
+	new_node.score = data.score
 end
 
 
 function OBST_AVOID_PATH_GEN:CreateSeedNode( pos )
 	local tr = doValidationHullTrace(
 		pos + Vector(0,0,16),
-		pos - Vector(0,0,NODE_MIN_DIST),
+		pos - Vector(0,0,self.node_min_dist),
 		Vector(-self.hull_halfthick, -self.hull_halfthick, 0),
 		Vector(self.hull_halfthick, self.hull_halfthick, 0),
 		self.ent
@@ -105,17 +147,21 @@ function OBST_AVOID_PATH_GEN:CreateSeedNode( pos )
 	
 	local pos = pos
 	if tr.Hit then
-		pos = tr.HitPos
+		pos = tr.HitPos + Vector(0,0,1)
 	end
 
 	local new_node = NODE_OBJECT:create( pos )
 	
-	self:ScoreNode( new_node )
+	self:EvaluateNode( new_node )
+	local score_data = self:ScoreNodeWithParent( new_node, nil )
+	self:ApplyDataToNode( new_node, score_data )
 
 	table.insert(self.nodes, new_node)
 	table.insert(self.open_nodes, new_node)
 	
-	new_node.open = true
+	new_node.open = false
+	
+	self:EstimateNewNodesFromGivenNode( new_node )
 end
 
 
@@ -183,16 +229,16 @@ end
 
 function OBST_AVOID_PATH_GEN:EstimateNewNodesFromGivenNode( node )
 	-- next we generate a list of possible positions we might be able to travel to from here.
-	for x = -NODE_TRAVEL_DIST, NODE_TRAVEL_DIST, NODE_TRAVEL_DIST/2 do
-		for y = -NODE_TRAVEL_DIST, NODE_TRAVEL_DIST, NODE_TRAVEL_DIST/2 do
-			for z = 0, 0 do -- -NODE_TRAVEL_DIST, NODE_TRAVEL_DIST, NODE_TRAVEL_DIST do
+	for x = -self.node_travel_dist, self.node_travel_dist, self.node_travel_dist do
+		for y = -self.node_travel_dist, self.node_travel_dist, self.node_travel_dist do
+			for z = 0, 0 do -- -self.node_travel_dist, self.node_travel_dist, self.node_travel_dist do
 				if not (x==0 and y==0 and z==0) then
 					local new_pos = node.pos + Vector(x,y,z)
 					
 					if util.IsInWorld(new_pos) then
 						local tr = doValidationHullTrace(
 							new_pos + Vector(0,0,16),
-							new_pos - Vector(0,0,NODE_MAX_DIST),
+							new_pos - Vector(0,0,self.node_max_dist),
 							Vector(-self.hull_halfthick, -self.hull_halfthick, 0),
 							Vector(self.hull_halfthick, self.hull_halfthick, 0),
 							self.ent
@@ -201,21 +247,19 @@ function OBST_AVOID_PATH_GEN:EstimateNewNodesFromGivenNode( node )
 						if tr.Hit and not tr.StartSolid then
 							new_pos = tr.HitPos + Vector(0,0,1)
 							
-							local other_nearest, other_nearest_dist = self:GetNearestNode( new_pos, NODE_MAX_DIST )
+							local other_nearest, other_nearest_dist = self:GetNearestNode( new_pos, self.node_max_dist )
 						
-							if (other_nearest == nil) or (other_nearest_dist >= NODE_MIN_DIST) then
+							if (other_nearest == nil) or (other_nearest_dist >= self.node_min_dist) then
 								local results = self:CheckSpacialValidityAtPos(new_pos)
 								
 								if results.can_stand_here then
-									local new_node = NODE_OBJECT:create(new_pos)
+									local new_node = NODE_OBJECT:create( new_pos )
 									table.insert(self.nodes, new_node)
 									table.insert(self.open_nodes, new_node)
 									
 									new_node.open = true
-									new_node.parent = node
 									
-									self:ScoreNode( new_node )
-									
+									self:EvaluateNode(new_node)
 									self:GenerateConnections(new_node)
 								end
 							end
@@ -249,23 +293,37 @@ end
 
 
 function OBST_AVOID_PATH_GEN:GenerateConnections( node )
-	local mins = node.pos - (NODE_MAX_DIST*Vector(1,1,1))
-	local maxs = node.pos + (NODE_MAX_DIST*Vector(1,1,1))
-	
 	for i, other_node in ipairs(self.nodes) do
 		if other_node != node then
 			local dist = node.pos:Distance(other_node.pos)
-			if dist >= NODE_MIN_DIST and dist <= NODE_MAX_DIST then
+			if dist >= self.node_min_dist and dist <= self.node_max_dist then
 				local existing_connection = self:FindConnection(node, other_node)
 				
 				if existing_connection == nil then
-					local new_connection = CONNECTION_OBJECT:create(node, other_node, {tested=false})
-					local center = LerpVector(0.5, node.pos, other_node.pos)
+					local tr = doValidationHullTrace(
+						node.pos,
+						other_node.pos,
+						Vector(-self.hull_halfthick+1, -self.hull_halfthick+1, 0),
+						Vector(self.hull_halfthick+1, self.hull_halfthick+1, self.hull_stand_height+1),
+						self.ent
+					)
 					
-					table.insert(self.connections, new_connection)
-					
-					table.insert(node.connections, new_connection)
-					table.insert(other_node.connections, new_connection)
+					if not tr.Hit then
+						local new_connection = CONNECTION_OBJECT:create(node, other_node)
+						local center = LerpVector(0.5, node.pos, other_node.pos)
+						
+						table.insert(self.connections, new_connection)
+						
+						table.insert(node.connections, new_connection)
+						table.insert(other_node.connections, new_connection)
+						
+						if not other_node.open then
+							local score_data = self:ScoreNodeWithParent( node, other_node )
+							if node.parent == nil or node.score > score_data.score then
+								self:ApplyDataToNode( node, score_data )
+							end
+						end
+					end
 				end
 			end
 		end
@@ -276,37 +334,22 @@ end
 -- =======================================================
 
 
-function OBST_AVOID_PATH_GEN:SetStartPos( pos )
-	self.start_pos = pos
-
-	local nearest, nearest_dist = self:GetNearestNode(pos, 64)
-	
-	self.start_node = nearest
-end
-
-
-function OBST_AVOID_PATH_GEN:SetEndPos( pos )
-	self.end_pos = pos
-
-	local nearest, nearest_dist = self:GetNearestNode(pos, 64)
-	
-	self.end_node = nearest
-end
-
 
 function OBST_AVOID_PATH_GEN:CalcPath()
-	while self.end_node == nil and #self.open_nodes > 0 do
-		print( #self.nodes, #self.open_nodes, #self.closed_nodes )
-		
+	local max_nodes = self.options.max_nodes or 300
+
+	while self.end_node == nil and #self.open_nodes > 0 and #self.nodes < max_nodes do
 		local pick_index = nil
 		local pick_score = nil
 		
 		for i, node in ipairs( self.open_nodes ) do
-			if pick_score == nil or node.score < pick_score then
+			if node.parent != nil and (pick_score == nil or node.score < pick_score) then
 				pick_index = i
 				pick_score = node.score
 			end
 		end
+		
+		if pick_index == nil then return "failed" end
 		
 		local pick = self.open_nodes[pick_index]
 		
@@ -315,27 +358,31 @@ function OBST_AVOID_PATH_GEN:CalcPath()
 		
 		pick.open = false
 		
-		if pick.valid_end_node and pick.dist_from_path < NODE_TRAVEL_DIST*2 then
+		if pick.path_cursor_offset > 0 and pick.dist_from_path < self.node_travel_dist then
 			self.end_node = pick
-		else
-			self:EstimateNewNodesFromGivenNode( pick )
+			break
 		end
+
+		self:EstimateNewNodesFromGivenNode( pick )
+
 		
-		print( pick.score )
+		if self.options.draw then self:DrawDebug( 0.1 ) end
 		
-		self:DrawDebug( 0.1 )
+		self.path:Draw()
+		debugoverlay.Line(pick.pos+Vector(0,0,10), pick.path_cursor_pos+Vector(0,0,10), 0.1, COLOR_WHITE, true)
 		coroutine.yield()
 	end
+	
+	if self.end_node == nil or #self.nodes >= max_nodes then return "failed" end
 	
 	local new_path = {}
 	local current_node = self.end_node
 	while current_node != nil do
-		print( #new_path )
 		table.insert(new_path, current_node.pos)
 		current_node = current_node.parent
 	end
-	
 	new_path = table.Reverse( new_path )
+	self.output = new_path
 	
-	return new_path
+	return "ok"
 end

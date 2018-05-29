@@ -4,7 +4,7 @@ NODE_OBJECT = NODE_OBJECT or {}
 
 
 
-function NODE_OBJECT:create( pos, parent )
+function NODE_OBJECT:create( pos )
 	local instance = {}
 	setmetatable(instance,self)
 	self.__index = self
@@ -12,16 +12,13 @@ function NODE_OBJECT:create( pos, parent )
 	instance.id = CURRENT_ID * 1.0
 	instance.pos = pos
 	instance.connections = {}
-	instance.parent = parent
+	instance.parent = nil
 	instance.travel_dist = 0
 	instance.dist_from_path = 0
+	instance.path_cursor_pos = nil
+	instance.path_cursor_offset = 0
 	instance.score = 0
 	instance.open = true
-	instance.valid_end_node = false
-	
-	if parent != nil then
-		instance.travel_dist = pos:Distance( parent.pos ) + parent.travel_dist
-	end
 	
 	CURRENT_ID = CURRENT_ID + 1
 	
@@ -52,6 +49,7 @@ end
 
 local OPEN_NODE_COLOR = Color(0,128,0)
 local CLOSED_NODE_COLOR = Color(0,0,128)
+local COLOR_MAGENTA = Color(255,0,255)
 
 function NODE_OBJECT:DrawDebug(duration)
 	if not duration then
@@ -65,5 +63,9 @@ function NODE_OBJECT:DrawDebug(duration)
 	
 	local s = 3
 	debugoverlay.Cross(self.pos, s, duration, c)
-	-- debugoverlay.Text(self.pos, tostring(self.id), duration)
+	-- debugoverlay.Text(self.pos, tostring(math.floor(self.score)), duration)
+	
+	if self.parent != nil then
+		debugoverlay.Line(self.pos+Vector(0,0,10), self.parent.pos+Vector(0,0,15), duration, COLOR_MAGENTA, true)
+	end
 end

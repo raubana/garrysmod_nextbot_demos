@@ -86,7 +86,6 @@ function ENT:BodyUpdate()
 	
 	if act == ACT_WALK then
 		self:BodyMoveXY()
-		return
 	end
 	
 	self:FrameAdvance()
